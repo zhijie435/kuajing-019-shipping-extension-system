@@ -1,0 +1,53 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f5f7fa;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2d3d;
+  margin: 0;
+}
+
+.card-wrapper {
+  background: #fff;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.filter-bar {
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  padding: 20px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.stat-card .stat-label {
+  color: #909399;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.stat-card .stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2d3d;
+}
+
+.stat-card .stat-value.success { color: #67c23a; }
+.stat-card .stat-value.warning { color: #e6a23c; }
+.stat-card .stat-value.danger { color: #f56c6c; }
+.stat-card .stat-value.info { color: #909399; }
