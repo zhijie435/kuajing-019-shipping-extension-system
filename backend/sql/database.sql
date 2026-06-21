@@ -198,7 +198,42 @@ INSERT INTO `carrier_configs` (`carrier_id`, `protocol_type`, `api_base_url`, `a
 (4, 'http', 'https://onlinetools.ups.com/track/v1', 'oauth2', 'https://your-domain.com/api/tracking/callback/UPS', 'ups_callback_secret_2024', 30, 3, 200),
 (5, 'http', 'https://api.yanwen.com/v2', 'api_key', 'https://your-domain.com/api/tracking/callback/YANWEN', 'yanwen_callback_secret_2024', 30, 3, 100);
 
--- 11. 初始化轨迹状态映射规则
+-- 11. 承运商配置历史表
+CREATE TABLE IF NOT EXISTS `carrier_config_history` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `carrier_id` INT UNSIGNED NOT NULL COMMENT '承运商ID',
+  `config_snapshot` JSON NOT NULL COMMENT '配置快照(JSON)',
+  `change_type` VARCHAR(32) NOT NULL DEFAULT 'update' COMMENT '变更类型: create=创建 update=更新 rollback=回滚',
+  `operator` VARCHAR(64) DEFAULT '' COMMENT '操作人',
+  `change_remark` VARCHAR(256) DEFAULT '' COMMENT '变更说明',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_carrier_id` (`carrier_id`),
+  KEY `idx_created_at` (`created_at`),
+  CONSTRAINT `fk_config_history_carrier` FOREIGN KEY (`carrier_id`) REFERENCES `carriers`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='承运商配置历史表';
+
+-- 12. 轨迹回滚记录表
+CREATE TABLE IF NOT EXISTS `tracking_rollback_logs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `carrier_code` VARCHAR(64) NOT NULL COMMENT '承运商编码',
+  `carrier_id` INT UNSIGNED NOT NULL COMMENT '承运商ID',
+  `rollback_type` VARCHAR(32) NOT NULL DEFAULT 'time_range' COMMENT '回滚类型: time_range=按时间范围 tracking_no=按运单号 batch=按批次',
+  `rollback_scope` JSON DEFAULT NULL COMMENT '回滚范围参数',
+  `rollback_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '回滚事件数量',
+  `status` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '状态: 0=待执行 1=执行中 2=成功 3=失败',
+  `operator` VARCHAR(64) DEFAULT '' COMMENT '操作人',
+  `remark` VARCHAR(256) DEFAULT '' COMMENT '备注',
+  `error_message` VARCHAR(512) DEFAULT '' COMMENT '错误信息',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `finished_at` DATETIME DEFAULT NULL COMMENT '完成时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_carrier_code` (`carrier_code`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='轨迹回滚记录表';
+
+-- 13. 初始化轨迹状态映射规则
 INSERT INTO `tracking_status_mappings` (`carrier_code`, `carrier_event_code`, `carrier_event_desc`, `standard_status`, `is_exception`, `exception_type`, `priority`) VALUES
 ('SF_EXPRESS', 'COLLECTED', '已揽收', 'PICKED_UP', 0, '', 10),
 ('SF_EXPRESS', 'IN_TRANSIT', '运输中', 'IN_TRANSIT', 0, '', 10),
