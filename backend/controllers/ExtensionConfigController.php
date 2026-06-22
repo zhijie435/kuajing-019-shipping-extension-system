@@ -189,7 +189,11 @@ class ExtensionConfigController
             return;
         }
 
-        $this->configService->deleteStatusMapping($id);
-        JsonResponse::success(null, '状态映射删除成功');
+        try {
+            $this->configService->deleteStatusMapping($id);
+            JsonResponse::success(null, '状态映射删除成功');
+        } catch (Throwable $e) {
+            JsonResponse::error('状态映射删除失败: ' . $e->getMessage(), 500);
+        }
     }
 }
