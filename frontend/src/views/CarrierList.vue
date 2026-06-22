@@ -318,7 +318,7 @@ const loadList = async () => {
     const res = await request.get('/carriers', {
       params: { ...filterForm, page: page.value, page_size: pageSize.value },
     })
-    list.value = res.pagination ? (res.items || []) : (res.items || [])
+    list.value = res.items || []
     total.value = res.pagination ? res.pagination.total : (res.total || 0)
   } catch (e) { /* ignore */ }
   loading.value = false

@@ -47,11 +47,12 @@ class CarrierService
         $total = (int)$stmt->fetchColumn();
 
         $sql = "SELECT c.*, 
-                       cc.protocol_type, cc.api_base_url, cc.auth_type, cc.callback_url, cc.status as config_status,
+                       cc.protocol_type, cc.api_base_url, cc.auth_type, cc.callback_url, cc.timeout_seconds, cc.retry_times, cc.rate_limit, cc.status as config_status,
                        (SELECT COUNT(*) FROM carrier_products cp WHERE cp.carrier_id = c.id AND cp.status = 1) as product_count
                 FROM carriers c 
                 LEFT JOIN carrier_configs cc ON c.id = cc.carrier_id
                 WHERE {$whereSql} 
+                GROUP BY c.id 
                 ORDER BY c.priority DESC, c.created_at DESC 
                 LIMIT {$offset}, {$pageSize}";
         $stmt = $this->db->prepare($sql);
@@ -64,7 +65,10 @@ class CarrierService
     public function getCarrier(int $id): ?array
     {
         $stmt = $this->db->prepare(
-            "SELECT c.*, cc.* 
+            "SELECT c.*, 
+                    cc.id as config_id, cc.protocol_type, cc.api_base_url, cc.auth_type, cc.api_key, cc.api_secret, 
+                    cc.auth_token, cc.callback_url, cc.callback_secret, cc.timeout_seconds, cc.retry_times, 
+                    cc.rate_limit, cc.extra_config, cc.status as config_status, cc.created_at as config_created_at, cc.updated_at as config_updated_at
              FROM carriers c 
              LEFT JOIN carrier_configs cc ON c.id = cc.carrier_id 
              WHERE c.id = :id"

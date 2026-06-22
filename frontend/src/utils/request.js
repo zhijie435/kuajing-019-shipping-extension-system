@@ -13,7 +13,7 @@ request.interceptors.response.use(
       ElMessage.error(res.message || '请求失败')
       return Promise.reject(res)
     }
-    return res.data !== undefined ? res : response
+    return res.data !== undefined ? res.data : res
   },
   (error) => {
     ElMessage.error(error.message || '网络错误')
