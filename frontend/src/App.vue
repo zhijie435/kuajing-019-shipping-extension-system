@@ -28,6 +28,10 @@
           <el-icon><Document /></el-icon>
           <span>回调日志</span>
         </el-menu-item>
+        <el-menu-item index="/tracking/rollback">
+          <el-icon><RefreshLeft /></el-icon>
+          <span>轨迹回滚</span>
+        </el-menu-item>
         <el-menu-item index="/extension">
           <el-icon><Setting /></el-icon>
           <span>扩展配置</span>

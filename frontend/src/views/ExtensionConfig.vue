@@ -76,7 +76,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
 
 const loading = ref(false)
@@ -131,6 +131,32 @@ const markChanged = (key) => {
   }
 }
 
+const doBatchSave = async () => {
+  const updates = {}
+  for (const key of changedKeys.value) {
+    updates[key] = configValues[key]
+  }
+  const res = await request.post('/extension/batch', { configs: updates }, {
+    skipErrorNotification: true,
+  })
+  ElMessage.success('批量保存成功')
+
+  configs.value = res || []
+  configs.value.forEach(c => {
+    if (c.value_type === 'json' && typeof c.config_value === 'string') {
+      try {
+        configValues[c.config_key] = JSON.stringify(JSON.parse(c.config_value), null, 2)
+      } catch (e) {
+        configValues[c.config_key] = c.config_value
+      }
+    } else {
+      configValues[c.config_key] = c.config_value
+    }
+    originalValues[c.config_key] = configValues[c.config_key]
+  })
+  changedKeys.value = new Set()
+}
+
 const handleBatchSave = async () => {
   if (changedKeys.value.size === 0) {
     ElMessage.warning('没有需要保存的修改')
@@ -139,29 +165,26 @@ const handleBatchSave = async () => {
 
   saving.value = true
   try {
-    const updates = {}
-    for (const key of changedKeys.value) {
-      updates[key] = configValues[key]
-    }
-    const res = await request.post('/extension/batch', { configs: updates })
-    ElMessage.success('批量保存成功')
-
-    configs.value = res || []
-    configs.value.forEach(c => {
-      if (c.value_type === 'json' && typeof c.config_value === 'string') {
-        try {
-          configValues[c.config_key] = JSON.stringify(JSON.parse(c.config_value), null, 2)
-        } catch (e) {
-          configValues[c.config_key] = c.config_value
-        }
-      } else {
-        configValues[c.config_key] = c.config_value
-      }
-      originalValues[c.config_key] = configValues[c.config_key]
-    })
-    changedKeys.value = new Set()
+    await doBatchSave()
   } catch (e) {
-    ElMessage.error('批量保存失败，请检查配置值是否正确')
+    const errorMsg = e?.message || e?.data?.message || (typeof e === 'string' ? e : '未知错误')
+    try {
+      await ElMessageBox.alert(
+        `提交失败，系统已自动回滚所有修改，数据未保存。\n\n错误信息：${errorMsg}`,
+        '保存失败',
+        {
+          confirmButtonText: '重试',
+          cancelButtonText: '取消',
+          showCancelButton: true,
+          type: 'error',
+          dangerouslyUseHTMLString: false,
+        }
+      )
+      saving.value = false
+      handleBatchSave()
+      return
+    } catch (cancelErr) {
+    }
   }
   saving.value = false
 }

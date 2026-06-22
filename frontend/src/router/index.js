@@ -27,6 +27,11 @@ const routes = [
     component: () => import('@/views/TrackingLogs.vue'),
   },
   {
+    path: '/tracking/rollback',
+    name: 'TrackingRollback',
+    component: () => import('@/views/TrackingRollback.vue'),
+  },
+  {
     path: '/extension',
     name: 'Extension',
     component: () => import('@/views/ExtensionConfig.vue'),

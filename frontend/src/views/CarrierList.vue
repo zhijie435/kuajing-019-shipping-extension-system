@@ -54,10 +54,11 @@
             {{ row.protocol_type ? row.protocol_type.toUpperCase() : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="handleView(row)">详情</el-button>
             <el-button size="small" type="primary" @click="handleEdit(row)">编辑</el-button>
+            <el-button size="small" type="warning" @click="handleLinkageCheck(row)">校验</el-button>
             <el-dropdown @command="(cmd) => handleStatusCmd(cmd, row)" style="margin-left:4px">
               <el-button size="small" :type="row.status === 1 ? 'warning' : 'success'">
                 {{ row.status === 1 ? '停用' : '启用' }}
@@ -215,6 +216,41 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="linkageDialogVisible" title="联动校验结果" width="650px" destroy-on-close>
+      <div v-if="linkageResult" v-loading="linkageLoading">
+        <el-result
+          :icon="linkageResult.all_passed ? 'success' : 'warning'"
+          :title="linkageResult.all_passed ? '所有校验通过' : '校验未通过'"
+          :sub-title="`承运商: ${linkageResult.carrier_name} (${linkageResult.carrier_code}) | ${linkageResult.passed_count}/${linkageResult.total_count} 项通过`"
+        />
+        <div style="margin-top:12px">
+          <div v-for="check in linkageResult.checks" :key="check.name" style="margin-bottom:12px;padding:12px;border:1px solid #ebeef5;border-radius:4px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <el-icon :color="check.passed ? '#67c23a' : '#f56c6c'" size="18">
+                <CircleCheckFilled v-if="check.passed" />
+                <CircleCloseFilled v-else />
+              </el-icon>
+              <span :style="{fontWeight:600,fontSize:'14px',color:check.passed?'#67c23a':'#f56c6c'}">{{ check.name }}</span>
+            </div>
+            <div v-if="check.errors && check.errors.length" style="padding-left:26px">
+              <div v-for="err in check.errors" :key="err" style="color:#f56c6c;font-size:13px;margin-bottom:2px">
+                ✗ {{ err }}
+              </div>
+            </div>
+            <div v-if="check.warnings && check.warnings.length" style="padding-left:26px">
+              <div v-for="warn in check.warnings" :key="warn" style="color:#e6a23c;font-size:13px;margin-bottom:2px">
+                ⚠ {{ warn }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <el-empty v-else description="暂无校验结果" />
+      <template #footer>
+        <el-button @click="linkageDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -222,6 +258,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CircleCheckFilled, CircleCloseFilled } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 const router = useRouter()
@@ -424,6 +461,22 @@ const handleDelete = async (row) => {
 
 const handleView = (row) => {
   router.push(`/carriers/${row.id}`)
+}
+
+const linkageDialogVisible = ref(false)
+const linkageLoading = ref(false)
+const linkageResult = ref(null)
+
+const handleLinkageCheck = async (row) => {
+  linkageDialogVisible.value = true
+  linkageLoading.value = true
+  linkageResult.value = null
+  try {
+    linkageResult.value = await request.get(`/carriers/linkage-check/${row.id}`)
+  } catch (e) {
+    ElMessage.error('联动校验失败')
+  }
+  linkageLoading.value = false
 }
 
 onMounted(() => {

@@ -48,20 +48,29 @@ class TrackingService
                 throw new RuntimeException('承运商不存在: ' . $carrierCode);
             }
 
-            $savedCount = 0;
-            $skippedCount = 0;
+            $this->db->beginTransaction();
 
-            foreach ($parsedData['events'] as $event) {
-                $result = $this->saveTrackingEvent($carrierCode, $carrierId, $parsedData['tracking_no'], $event);
-                if ($result === 'saved') {
-                    $savedCount++;
-                } else {
-                    $skippedCount++;
+            try {
+                $savedCount = 0;
+                $skippedCount = 0;
+
+                foreach ($parsedData['events'] as $event) {
+                    $result = $this->saveTrackingEvent($carrierCode, $carrierId, $parsedData['tracking_no'], $event);
+                    if ($result === 'saved') {
+                        $savedCount++;
+                    } else {
+                        $skippedCount++;
+                    }
                 }
+
+                $this->db->commit();
+            } catch (Exception $innerEx) {
+                $this->db->rollBack();
+                throw $innerEx;
             }
 
             if ($this->config['tracking']['auto_sync_enabled']) {
-                $this->syncToOrder($parsedData['tracking_no']);
+                $this->syncToOrder($parsedData['tracking_no'], $carrierCode);
             }
 
             $processingTime = round((microtime(true) - $startTime) * 1000, 2);
@@ -372,13 +381,51 @@ class TrackingService
         return $mapping ?: TrackingStandardStatus::UNKNOWN;
     }
 
-    private function syncToOrder(string $trackingNo): void
+    private function syncToOrder(string $trackingNo, string $carrierCode = ''): void
     {
         $stmt = $this->db->prepare(
             "UPDATE tracking_events SET is_synced = 1, sync_time = NOW() 
              WHERE tracking_no = :tracking_no AND is_synced = 0"
         );
         $stmt->execute([':tracking_no' => $trackingNo]);
+
+        $this->updateLatestStatusToOrder($trackingNo, $carrierCode);
+    }
+
+    private function updateLatestStatusToOrder(string $trackingNo, string $carrierCode = ''): void
+    {
+        $sql = "SELECT standard_status, event_time FROM tracking_events 
+                WHERE tracking_no = :tracking_no";
+        $binds = [':tracking_no' => $trackingNo];
+
+        if (!empty($carrierCode)) {
+            $sql .= " AND carrier_code = :carrier_code";
+            $binds[':carrier_code'] = $carrierCode;
+        }
+
+        $sql .= " ORDER BY event_time DESC LIMIT 1";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($binds);
+        $latestEvent = $stmt->fetch();
+
+        if (!$latestEvent) {
+            return;
+        }
+
+        $stmt = $this->db->prepare(
+            "UPDATE tracking_events SET order_status = :status 
+             WHERE tracking_no = :tracking_no AND is_synced = 1"
+        );
+        $stmt->execute([
+            ':status' => $latestEvent['standard_status'],
+            ':tracking_no' => $trackingNo,
+        ]);
+
+        $this->logger->info('轨迹状态回写订单成功', [
+            'tracking_no' => $trackingNo,
+            'latest_status' => $latestEvent['standard_status'],
+        ]);
     }
 
     private function logCallback(string $carrierCode, string $body, array $headers, string $ip): int

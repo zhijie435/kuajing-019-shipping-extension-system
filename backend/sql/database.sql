@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS `tracking_events` (
   `raw_data` JSON DEFAULT NULL COMMENT '原始回传数据(JSON)',
   `is_synced` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否已同步到订单: 0=否 1=是',
   `sync_time` DATETIME DEFAULT NULL COMMENT '同步时间',
+  `order_status` VARCHAR(32) DEFAULT '' COMMENT '回写到订单的最新状态',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tracking_event` (`tracking_no`, `carrier_code`, `event_code`, `event_time`),
