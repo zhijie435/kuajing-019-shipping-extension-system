@@ -11,15 +11,15 @@
       <div class="filter-bar">
         <el-form :inline="true" :model="filterForm" @submit.prevent="loadList">
           <el-form-item label="关键词">
-            <el-input v-model="filterForm.keyword" placeholder="编码/名称" clearable @clear="loadList" />
+            <el-input v-model="filterForm.keyword" placeholder="编码/名称" clearable @clear="handleFilterChange" />
           </el-form-item>
           <el-form-item label="类型">
-            <el-select v-model="filterForm.carrier_type" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.carrier_type" placeholder="全部" clearable @change="handleFilterChange">
               <el-option v-for="t in meta.carrier_types" :key="t.value" :label="t.label" :value="t.value" />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="filterForm.status" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.status" placeholder="全部" clearable @change="handleFilterChange">
               <el-option v-for="s in meta.carrier_statuses" :key="s.value" :label="s.label" :value="s.value" />
             </el-select>
           </el-form-item>
@@ -359,6 +359,11 @@ const loadList = async () => {
     total.value = res.pagination ? res.pagination.total : (res.total || 0)
   } catch (e) { /* ignore */ }
   loading.value = false
+}
+
+const handleFilterChange = () => {
+  page.value = 1
+  loadList()
 }
 
 const resetFilter = () => {

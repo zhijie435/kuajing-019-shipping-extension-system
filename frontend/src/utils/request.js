@@ -6,6 +6,17 @@ const request = axios.create({
   timeout: 30000,
 })
 
+request.interceptors.request.use(
+  (config) => {
+    if (config.method === 'get' && !config.allowCache) {
+      const separator = config.url.includes('?') ? '&' : '?'
+      config.url = `${config.url}${separator}_t=${Date.now()}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
 request.interceptors.response.use(
   (response) => {
     const res = response.data

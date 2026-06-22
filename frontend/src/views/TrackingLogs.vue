@@ -8,12 +8,12 @@
       <div class="filter-bar">
         <el-form :inline="true" :model="filterForm" @submit.prevent="loadList">
           <el-form-item label="承运商">
-            <el-select v-model="filterForm.carrier_code" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.carrier_code" placeholder="全部" clearable @change="handleFilterChange">
               <el-option v-for="c in carriers" :key="c.carrier_code" :label="c.carrier_name" :value="c.carrier_code" />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="filterForm.process_status" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.process_status" placeholder="全部" clearable @change="handleFilterChange">
               <el-option label="待处理" :value="0" />
               <el-option label="处理成功" :value="1" />
               <el-option label="处理失败" :value="2" />
@@ -109,6 +109,11 @@ const loadList = async () => {
     total.value = res.pagination ? res.pagination.total : (res.total || 0)
   } catch (e) { /* ignore */ }
   loading.value = false
+}
+
+const handleFilterChange = () => {
+  page.value = 1
+  loadList()
 }
 
 const resetFilter = () => {

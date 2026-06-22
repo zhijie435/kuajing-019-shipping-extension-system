@@ -7,7 +7,7 @@
 
     <el-alert
       v-if="hasChanges"
-      title="有未保存的修改，请点击"批量保存"提交"
+      :title="'有未保存的修改，请点击「批量保存」提交'"
       type="warning"
       show-icon
       :closable="false"

@@ -35,20 +35,20 @@
       <div class="filter-bar">
         <el-form :inline="true" :model="filterForm" @submit.prevent="loadList">
           <el-form-item label="运单号">
-            <el-input v-model="filterForm.tracking_no" placeholder="运单号" clearable @clear="loadList" />
+            <el-input v-model="filterForm.tracking_no" placeholder="运单号" clearable @clear="handleFilterChange" />
           </el-form-item>
           <el-form-item label="承运商">
-            <el-select v-model="filterForm.carrier_code" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.carrier_code" placeholder="全部" clearable @change="handleFilterChange">
               <el-option v-for="c in carriers" :key="c.carrier_code" :label="c.carrier_name" :value="c.carrier_code" />
             </el-select>
           </el-form-item>
           <el-form-item label="状态">
-            <el-select v-model="filterForm.standard_status" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.standard_status" placeholder="全部" clearable @change="handleFilterChange">
               <el-option v-for="s in meta.standard_statuses" :key="s.value" :label="s.label" :value="s.value" />
             </el-select>
           </el-form-item>
           <el-form-item label="同步">
-            <el-select v-model="filterForm.is_synced" placeholder="全部" clearable @change="loadList">
+            <el-select v-model="filterForm.is_synced" placeholder="全部" clearable @change="handleFilterChange">
               <el-option label="未同步" :value="0" />
               <el-option label="已同步" :value="1" />
             </el-select>
@@ -175,6 +175,11 @@ const loadStats = async () => {
     stats.unsyncedCount = res.unsynced_count || 0
     stats.failedCallbackCount = res.failed_callback_count || 0
   } catch (e) { /* ignore */ }
+}
+
+const handleFilterChange = () => {
+  page.value = 1
+  loadList()
 }
 
 const resetFilter = () => {
