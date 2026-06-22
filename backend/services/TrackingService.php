@@ -467,4 +467,255 @@ class TrackingService
             'notify_email' => $this->config['notification']['tracking_exception_email'],
         ]);
     }
+
+    public function rollbackTrackingByTimeRange(string $carrierCode, string $startTime, string $endTime, string $operator = '', string $remark = ''): int
+    {
+        if (empty($carrierCode)) {
+            throw new RuntimeException('承运商编码不能为空');
+        }
+        if (empty($startTime) || empty($endTime)) {
+            throw new RuntimeException('时间范围不能为空');
+        }
+
+        $carrierId = $this->getCarrierId($carrierCode);
+        if (!$carrierId) {
+            throw new RuntimeException('承运商不存在: ' . $carrierCode);
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $logId = $this->createRollbackLog($carrierCode, $carrierId, 'time_range', [
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+            ], $operator, $remark);
+
+            $this->updateRollbackLogStatus($logId, 1);
+
+            $countStmt = $this->db->prepare(
+                "SELECT COUNT(*) FROM tracking_events 
+                 WHERE carrier_code = :carrier_code 
+                 AND event_time BETWEEN :start_time AND :end_time"
+            );
+            $countStmt->execute([
+                ':carrier_code' => $carrierCode,
+                ':start_time' => $startTime,
+                ':end_time' => $endTime,
+            ]);
+            $rollbackCount = (int)$countStmt->fetchColumn();
+
+            $deleteStmt = $this->db->prepare(
+                "DELETE FROM tracking_events 
+                 WHERE carrier_code = :carrier_code 
+                 AND event_time BETWEEN :start_time AND :end_time"
+            );
+            $deleteStmt->execute([
+                ':carrier_code' => $carrierCode,
+                ':start_time' => $startTime,
+                ':end_time' => $endTime,
+            ]);
+
+            $this->updateRollbackLogStatus($logId, 2, null, $rollbackCount);
+
+            $this->db->commit();
+            $this->logger->info('轨迹数据回滚成功', [
+                'carrier_code' => $carrierCode,
+                'rollback_count' => $rollbackCount,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'operator' => $operator,
+            ]);
+
+            return $rollbackCount;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            if (isset($logId)) {
+                $this->updateRollbackLogStatus($logId, 3, $e->getMessage());
+            }
+            $this->logger->error('轨迹数据回滚失败', [
+                'carrier_code' => $carrierCode,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    public function rollbackTrackingByNo(string $trackingNo, string $carrierCode = '', string $operator = '', string $remark = ''): int
+    {
+        if (empty($trackingNo)) {
+            throw new RuntimeException('运单号不能为空');
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $where = 'tracking_no = :tracking_no';
+            $binds = [':tracking_no' => $trackingNo];
+
+            if (!empty($carrierCode)) {
+                $where .= ' AND carrier_code = :carrier_code';
+                $binds[':carrier_code'] = $carrierCode;
+            }
+
+            $carrierId = null;
+            if (!empty($carrierCode)) {
+                $carrierId = $this->getCarrierId($carrierCode);
+            }
+
+            $logId = $this->createRollbackLog($carrierCode, $carrierId ?: 0, 'tracking_no', [
+                'tracking_no' => $trackingNo,
+            ], $operator, $remark);
+
+            $this->updateRollbackLogStatus($logId, 1);
+
+            $countStmt = $this->db->prepare("SELECT COUNT(*) FROM tracking_events WHERE {$where}");
+            $countStmt->execute($binds);
+            $rollbackCount = (int)$countStmt->fetchColumn();
+
+            $deleteStmt = $this->db->prepare("DELETE FROM tracking_events WHERE {$where}");
+            $deleteStmt->execute($binds);
+
+            $this->updateRollbackLogStatus($logId, 2, null, $rollbackCount);
+
+            $this->db->commit();
+            $this->logger->info('轨迹数据回滚成功', [
+                'tracking_no' => $trackingNo,
+                'carrier_code' => $carrierCode,
+                'rollback_count' => $rollbackCount,
+                'operator' => $operator,
+            ]);
+
+            return $rollbackCount;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            if (isset($logId)) {
+                $this->updateRollbackLogStatus($logId, 3, $e->getMessage());
+            }
+            $this->logger->error('轨迹数据回滚失败', [
+                'tracking_no' => $trackingNo,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    public function listRollbackLogs(array $params = []): array
+    {
+        $where = ['1=1'];
+        $binds = [];
+
+        if (!empty($params['carrier_code'])) {
+            $where[] = 'carrier_code = :carrier_code';
+            $binds[':carrier_code'] = $params['carrier_code'];
+        }
+
+        if (isset($params['status']) && $params['status'] !== '') {
+            $where[] = 'status = :status';
+            $binds[':status'] = (int)$params['status'];
+        }
+
+        $page = max(1, (int)($params['page'] ?? 1));
+        $pageSize = min(100, max(1, (int)($params['page_size'] ?? 20)));
+        $offset = ($page - 1) * $pageSize;
+
+        $whereSql = implode(' AND ', $where);
+
+        $countSql = "SELECT COUNT(*) FROM tracking_rollback_logs WHERE {$whereSql}";
+        $stmt = $this->db->prepare($countSql);
+        $stmt->execute($binds);
+        $total = (int)$stmt->fetchColumn();
+
+        $sql = "SELECT id, carrier_code, rollback_type, rollback_count, status, operator, remark, error_message, created_at, finished_at 
+                FROM tracking_rollback_logs 
+                WHERE {$whereSql} 
+                ORDER BY created_at DESC 
+                LIMIT {$offset}, {$pageSize}";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($binds);
+        $items = $stmt->fetchAll();
+
+        foreach ($items as &$item) {
+            if (!empty($item['rollback_scope'])) {
+                $item['rollback_scope'] = json_decode($item['rollback_scope'], true);
+            }
+        }
+
+        return ['items' => $items, 'total' => $total, 'page' => $page, 'page_size' => $pageSize];
+    }
+
+    public function simulateCallback(string $carrierCode, array $testData): array
+    {
+        if (empty($carrierCode)) {
+            throw new RuntimeException('承运商编码不能为空');
+        }
+
+        $carrierId = $this->getCarrierId($carrierCode);
+        if (!$carrierId) {
+            throw new RuntimeException('承运商不存在: ' . $carrierCode);
+        }
+
+        $adapter = CarrierAdapterFactory::create($carrierCode);
+
+        $body = json_encode($testData, JSON_UNESCAPED_UNICODE);
+
+        try {
+            $parsedData = $adapter->parseCallbackData($body);
+
+            $isValid = !empty($parsedData['tracking_no']) && !empty($parsedData['events']);
+
+            return [
+                'success' => $isValid,
+                'carrier_code' => $carrierCode,
+                'parsed_data' => $parsedData,
+                'raw_body' => $body,
+                'event_count' => count($parsedData['events'] ?? []),
+            ];
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'carrier_code' => $carrierCode,
+                'error' => $e->getMessage(),
+                'raw_body' => $body,
+            ];
+        }
+    }
+
+    private function createRollbackLog(string $carrierCode, int $carrierId, string $rollbackType, array $scope, string $operator = '', string $remark = ''): int
+    {
+        $stmt = $this->db->prepare(
+            "INSERT INTO tracking_rollback_logs (carrier_code, carrier_id, rollback_type, rollback_scope, status, operator, remark) 
+             VALUES (:carrier_code, :carrier_id, :rollback_type, :scope, 0, :operator, :remark)"
+        );
+        $stmt->execute([
+            ':carrier_code' => $carrierCode,
+            ':carrier_id' => $carrierId,
+            ':rollback_type' => $rollbackType,
+            ':scope' => json_encode($scope, JSON_UNESCAPED_UNICODE),
+            ':operator' => $operator,
+            ':remark' => $remark,
+        ]);
+
+        return (int)$this->db->lastInsertId();
+    }
+
+    private function updateRollbackLogStatus(int $logId, int $status, ?string $error = null, ?int $rollbackCount = null): void
+    {
+        $sql = "UPDATE tracking_rollback_logs SET status = :status";
+        $binds = [':id' => $logId, ':status' => $status];
+
+        if ($error !== null) {
+            $sql .= ", error_message = :error";
+            $binds[':error'] = $error;
+        }
+
+        if ($rollbackCount !== null) {
+            $sql .= ", rollback_count = :count";
+            $binds[':count'] = $rollbackCount;
+        }
+
+        if ($status == 2 || $status == 3) {
+            $sql .= ", finished_at = NOW()";
+        }
+
+        $sql .= " WHERE id = :id";
+        $this->db->prepare($sql)->execute($binds);
+    }
 }

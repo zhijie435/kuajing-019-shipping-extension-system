@@ -50,6 +50,28 @@ class CarrierController
                 $this->healthCheck($id);
                 break;
 
+            case $action === 'linkage-check':
+                $id = (int)($param ?? 0);
+                $this->linkageCheck($id);
+                break;
+
+            case $action === 'config-history':
+                $id = (int)($param ?? 0);
+                if ($method === 'GET') {
+                    $this->listConfigHistory($id, $query);
+                }
+                break;
+
+            case $action === 'config-history-detail':
+                $historyId = (int)($param ?? 0);
+                $this->getConfigHistoryDetail($historyId);
+                break;
+
+            case $action === 'rollback-config':
+                $historyId = (int)($param ?? 0);
+                $this->rollbackConfig($historyId, $data);
+                break;
+
             case $action === 'products':
                 $id = (int)($param ?? 0);
                 if ($method === 'GET') {
@@ -218,5 +240,71 @@ class CarrierController
 
         $this->carrierService->deleteCarrierProduct($productId);
         JsonResponse::success(null, '产品删除成功');
+    }
+
+    private function linkageCheck(int $id): void
+    {
+        if (empty($id)) {
+            JsonResponse::error('缺少参数 id', 400);
+            return;
+        }
+
+        try {
+            $result = $this->carrierService->linkageCheck($id);
+            JsonResponse::success($result, '联动校验完成');
+        } catch (Throwable $e) {
+            JsonResponse::error('联动校验失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function listConfigHistory(int $id, array $query): void
+    {
+        if (empty($id)) {
+            JsonResponse::error('缺少参数 id', 400);
+            return;
+        }
+
+        try {
+            $result = $this->carrierService->listConfigHistory($id, $query);
+            JsonResponse::paginate($result['items'], $result['total'], $result['page'], $result['page_size']);
+        } catch (Throwable $e) {
+            JsonResponse::error('获取配置历史失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function getConfigHistoryDetail(int $historyId): void
+    {
+        if (empty($historyId)) {
+            JsonResponse::error('缺少参数 history_id', 400);
+            return;
+        }
+
+        try {
+            $result = $this->carrierService->getConfigHistoryDetail($historyId);
+            if (!$result) {
+                JsonResponse::error('历史记录不存在', 404);
+                return;
+            }
+            JsonResponse::success($result);
+        } catch (Throwable $e) {
+            JsonResponse::error('获取历史详情失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function rollbackConfig(int $historyId, array $data): void
+    {
+        if (empty($historyId)) {
+            JsonResponse::error('缺少参数 history_id', 400);
+            return;
+        }
+
+        try {
+            $operator = $data['operator'] ?? '';
+            $remark = $data['remark'] ?? '';
+            $result = $this->carrierService->rollbackConfig($historyId, $operator, $remark);
+            JsonResponse::success(['rollback_success' => $result], '配置回滚成功');
+        } catch (Throwable $e) {
+            JsonResponse::error('配置回滚失败: ' . $e->getMessage(), 500);
+        }
     }
 }

@@ -46,6 +46,24 @@ class TrackingController
                 $this->getStatistics($query);
                 break;
 
+            case $action === 'rollback-time':
+                $this->rollbackTrackingByTime($data);
+                break;
+
+            case $action === 'rollback-no':
+                $this->rollbackTrackingByNo($data);
+                break;
+
+            case $action === 'rollback-logs':
+                if ($method === 'GET') {
+                    $this->listRollbackLogs($query);
+                }
+                break;
+
+            case $action === 'simulate-callback':
+                $this->simulateCallback($data);
+                break;
+
             default:
                 JsonResponse::error('未知的操作: ' . $action, 404);
         }
@@ -113,5 +131,74 @@ class TrackingController
     {
         $stats = $this->trackingService->getTrackingStatistics($query);
         JsonResponse::success($stats);
+    }
+
+    private function rollbackTrackingByTime(array $data): void
+    {
+        $carrierCode = $data['carrier_code'] ?? '';
+        $startTime = $data['start_time'] ?? '';
+        $endTime = $data['end_time'] ?? '';
+        $operator = $data['operator'] ?? '';
+        $remark = $data['remark'] ?? '';
+
+        if (empty($carrierCode) || empty($startTime) || empty($endTime)) {
+            JsonResponse::error('缺少必要参数: carrier_code, start_time, end_time', 400);
+            return;
+        }
+
+        try {
+            $count = $this->trackingService->rollbackTrackingByTimeRange($carrierCode, $startTime, $endTime, $operator, $remark);
+            JsonResponse::success(['rollback_count' => $count], "轨迹回滚成功，共回滚 {$count} 条记录");
+        } catch (Throwable $e) {
+            JsonResponse::error('轨迹回滚失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function rollbackTrackingByNo(array $data): void
+    {
+        $trackingNo = $data['tracking_no'] ?? '';
+        $carrierCode = $data['carrier_code'] ?? '';
+        $operator = $data['operator'] ?? '';
+        $remark = $data['remark'] ?? '';
+
+        if (empty($trackingNo)) {
+            JsonResponse::error('缺少参数 tracking_no', 400);
+            return;
+        }
+
+        try {
+            $count = $this->trackingService->rollbackTrackingByNo($trackingNo, $carrierCode, $operator, $remark);
+            JsonResponse::success(['rollback_count' => $count], "轨迹回滚成功，共回滚 {$count} 条记录");
+        } catch (Throwable $e) {
+            JsonResponse::error('轨迹回滚失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function listRollbackLogs(array $query): void
+    {
+        try {
+            $result = $this->trackingService->listRollbackLogs($query);
+            JsonResponse::paginate($result['items'], $result['total'], $result['page'], $result['page_size']);
+        } catch (Throwable $e) {
+            JsonResponse::error('获取回滚日志失败: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function simulateCallback(array $data): void
+    {
+        $carrierCode = $data['carrier_code'] ?? '';
+        $testData = $data['test_data'] ?? [];
+
+        if (empty($carrierCode) || empty($testData)) {
+            JsonResponse::error('缺少参数 carrier_code 或 test_data', 400);
+            return;
+        }
+
+        try {
+            $result = $this->trackingService->simulateCallback($carrierCode, $testData);
+            JsonResponse::success($result, $result['success'] ? '模拟回调成功' : '模拟回调失败');
+        } catch (Throwable $e) {
+            JsonResponse::error('模拟回调失败: ' . $e->getMessage(), 500);
+        }
     }
 }
